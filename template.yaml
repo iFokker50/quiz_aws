@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Quiz AWS - API Gateway with Lambda functions to list S3 buckets and objects
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 128
+    Architectures:
+      - x86_64
+
+Resources:
+  ListBucketsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: quiz-list-s3-buckets
+      CodeUri: src/list_buckets/
+      Handler: app.lambda_handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListAllMyBuckets
+              Resource: "*"
+      Events:
+        ListBucketsApi:
+          Type: Api
+          Properties:
+            Path: /buckets
+            Method: GET
+
+  ListObjectsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: quiz-list-s3-objects
+      CodeUri: src/list_objects/
+      Handler: app.lambda_handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: "arn:aws:s3:::*"
+      Events:
+        ListObjectsApi:
+          Type: Api
+          Properties:
+            Path: /objects
+            Method: GET
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
