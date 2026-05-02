@@ -1,8 +1,19 @@
 import json
 import boto3
+from botocore.exceptions import ClientError
 
 
 s3 = boto3.client("s3")
+
+
+def response(status_code: int, body: dict):
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "body": json.dumps(body)
+    }
 
 
 def lambda_handler(event, context):
@@ -11,17 +22,11 @@ def lambda_handler(event, context):
         bucket_name = query_params.get("bucket")
 
         if not bucket_name:
-            return {
-                "statusCode": 400,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
-                "body": json.dumps({
-                    "error": "Missing required query parameter: bucket"
-                })
-            }
+            return response(400, {
+                "error": "Missing required query parameter: bucket"
+            })
 
-        response = s3.list_objects_v2(Bucket=bucket_name)
+        s3_response = s3.list_objects_v2(Bucket=bucket_name)
 
         objects = [
             {
@@ -29,27 +34,34 @@ def lambda_handler(event, context):
                 "size": item["Size"],
                 "last_modified": item["LastModified"].isoformat()
             }
-            for item in response.get("Contents", [])
+            for item in s3_response.get("Contents", [])
         ]
 
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "bucket": bucket_name,
-                "objects": objects
+        return response(200, {
+            "bucket": bucket_name,
+            "objects": objects
+        })
+
+    except ClientError as error:
+        error_code = error.response.get("Error", {}).get("Code", "Unknown")
+
+        if error_code == "NoSuchBucket":
+            return response(404, {
+                "error": "Bucket does not exist",
+                "bucket": bucket_name
             })
-        }
+
+        if error_code == "AccessDenied":
+            return response(403, {
+                "error": "Access denied to bucket",
+                "bucket": bucket_name
+            })
+
+        return response(500, {
+            "error": str(error)
+        })
 
     except Exception as error:
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps({
-                "error": str(error)
-            })
-        }
+        return response(500, {
+            "error": str(error)
+        })
